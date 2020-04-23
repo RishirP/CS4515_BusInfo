@@ -64,6 +64,12 @@ public class SeptaInterface {
         this.makeVolleyRequest( url, BUS_STOP_LOCATIONS_RESPONSE, 0 );
     }
 
+    /**
+     * Request bus stop schedule from SEPTA api 
+     *
+     * @param stop_id
+     * @throws UnsupportedEncodingException
+     */
     public void getBusSchedule( int stop_id ) throws UnsupportedEncodingException {
 
         String url = API_DOMAIN + BUS_SCHEDULES_EXT + '?'
@@ -72,11 +78,25 @@ public class SeptaInterface {
         this.makeVolleyRequest( url, BUS_STOP_SCHEDULE_RESPONSE, stop_id );
     }
 
+    /**
+     * request bus locations from SEPTA api
+     *
+     * @param route
+     */
     public void getBusLocations( String route ) {
         String url = API_DOMAIN + BUS_LOCATIONS_BY_ROUTE_EXT + '/' + route;
         this.makeVolleyRequest( url, BUS_LOCATIONS_RESPONSE, 0 );
     }
 
+    /**
+     * get bus stop arrival times by trip number and bus stop
+     * I couldn't find an api from SEPTA to get this info so I
+     * downloaded the GTFS schedule data from SEPTA and created my own api for it
+     *
+     * @param stop_id
+     * @param trip_ids
+     * @throws UnsupportedEncodingException
+     */
     public void getBusStopTimes( int stop_id, String trip_ids ) throws UnsupportedEncodingException {
         String url = "https://findmeapp.tech/septa/bus-stop-times?"
                 + "stop_id=" + URLEncoder.encode( String.valueOf(stop_id), "UTF-8" )
