@@ -65,7 +65,7 @@ public class SeptaInterface {
     }
 
     /**
-     * Request bus stop schedule from SEPTA api 
+     * Request bus stop schedule from SEPTA api
      *
      * @param stop_id
      * @throws UnsupportedEncodingException
@@ -92,6 +92,7 @@ public class SeptaInterface {
      * get bus stop arrival times by trip number and bus stop
      * I couldn't find an api from SEPTA to get this info so I
      * downloaded the GTFS schedule data from SEPTA and created my own api for it
+     *
      *
      * @param stop_id
      * @param trip_ids
