@@ -1,6 +1,8 @@
 package edu.temple.businfo;
 
 import android.content.pm.PackageManager;
+import android.os.Parcel;
+import android.os.Parcelable;
 
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
@@ -28,6 +30,10 @@ public class BusStop {
 
     public void setMapMarker(Marker marker){
         this.mapMarker = marker;
+    }
+
+    public Boolean hasMarker(){
+        return mapMarker != null;
     }
 
     public void setRoutes(ArrayList<String> routes){

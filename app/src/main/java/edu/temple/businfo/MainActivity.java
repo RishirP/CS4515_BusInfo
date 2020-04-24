@@ -17,6 +17,9 @@ import android.location.LocationProvider;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Log;
+import android.view.View;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -32,6 +35,7 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.material.textfield.TextInputEditText;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -50,6 +54,7 @@ import java.util.TimerTask;
 public class MainActivity extends AppCompatActivity implements OnMapReadyCallback, SeptaInterface.SeptaResponseListener {
 
     private final int LOCATION_PERMISSION_REQUEST_CODE = 1;
+    private final String BUS_STOP_ID_KEY = "bus_stop_id";
 
     private GoogleMap map;
     private SupportMapFragment mapFragment;
@@ -61,9 +66,16 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private Map<Integer,BusStopTime> busStopTimes = new HashMap<>();
     private SeptaInterface septaApi;
     private BusStop currentBusStop;
+    private int savedBusStopId = 0;
     private BitmapDescriptor busIcon;
     private BitmapDescriptor busStopIcon;
+    private BitmapDescriptor busStopSelectedIcon;
     private TextView busStopTextView;
+    private TextInputEditText busEtaEditText;
+    private Button setEtaButton;
+    private Button gpsPermissionButton;
+
+    private int etaThreshold = 20; //default threshold of 20 minutes
 
     private Timer busTimer;
     private BusLocationTask busLocationTask;
@@ -73,16 +85,34 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        if( savedInstanceState != null ) {
+            savedBusStopId = savedInstanceState.getInt(BUS_STOP_ID_KEY, 0);
+        }
+
         busIcon = BitmapDescriptorFactory.fromResource(R.drawable.ic_bus);
         busStopIcon = BitmapDescriptorFactory.fromResource(R.drawable.ic_bus_stop);
+        busStopSelectedIcon = BitmapDescriptorFactory.fromResource(R.drawable.ic_bus_stop_selected);
         busStopTextView = findViewById(R.id.busStopTextView);
+        busEtaEditText = findViewById(R.id.busEtaTextInput);
+        setEtaButton = findViewById(R.id.setEtaButton);
+        busEtaEditText.setText( String.valueOf(etaThreshold) );
+        gpsPermissionButton = findViewById(R.id.gpsPermissionButton);
+
         septaApi = new SeptaInterface(this);
+
+        gpsPermissionButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, LOCATION_PERMISSION_REQUEST_CODE);
+            }
+        });
 
         // Check to see if permission is granted
         //request permission if not granted
         if (checkCallingOrSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) !=
                 PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, LOCATION_PERMISSION_REQUEST_CODE);
+            gpsPermissionButton.setVisibility(View.VISIBLE);
         } else {
             // Permission already granted
             // initialize activity
@@ -152,12 +182,36 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             busTimer = new Timer();
             busLocationTask = new BusLocationTask();
         }
+
+        setEtaButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                etaThreshold = Integer.parseInt( busEtaEditText.getText().toString() );
+                Log.d("septa","eta threshold: " + etaThreshold);
+                try {
+                    busTimer.cancel();
+                    septaApi.getBusSchedule(currentBusStop.getId());
+                } catch (UnsupportedEncodingException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        locationManager.removeUpdates(locationListener);
+        if( locationManager != null ) {
+            locationManager.removeUpdates(locationListener);
+        }
+    }
+
+    @Override
+    public void onSaveInstanceState(@NonNull Bundle outState){
+        super.onSaveInstanceState(outState);
+        if( currentBusStop != null ) {
+            outState.putInt(BUS_STOP_ID_KEY, currentBusStop.getId());
+        }
     }
 
     /**
@@ -186,20 +240,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 try {
                     BusStop stop = ((BusStop) marker.getTag());
                     if (stop != null) {
-                        busStopTextView.setText(stop.getName());
-                        Toast.makeText(MainActivity.this, stop.getName(), Toast.LENGTH_SHORT).show();
-                        try {
-                            //get bus stop schedule if the route data has not been set
-                            //otherwise get bus locations for stop
-                            currentBusStop = stop;
-                            if (currentBusStop.getRoutes() == null) {
-                                septaApi.getBusSchedule(stop.getId());
-                            }else{
-                                septaApi.getBusLocations( currentBusStop.getRoutes().get(0) );
-                            }
-                        } catch (UnsupportedEncodingException e) {
-                            e.printStackTrace();
-                        }
+                        busStopMarkerClicked( stop );
                     }
                 }catch(ClassCastException e){
                     e.printStackTrace();
@@ -208,6 +249,32 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 return false;
             }
         });
+    }
+
+    /**
+     * handle bus stop marker clicked event
+     *
+     * @param stop
+     */
+    private void busStopMarkerClicked(BusStop stop){
+        busStopTextView.setText(stop.getName());
+        Toast.makeText(MainActivity.this, stop.getName(), Toast.LENGTH_SHORT).show();
+        try {
+            //get bus stop schedule if the route data has not been set
+            //otherwise get bus locations for stop
+            if( currentBusStop != null ){
+                currentBusStop.getMapMarker().setIcon(busStopIcon);
+            }
+            currentBusStop = stop;
+            currentBusStop.getMapMarker().setIcon(busStopSelectedIcon);
+            if (currentBusStop.getRoutes() == null) {
+                septaApi.getBusSchedule(stop.getId());
+            }else{
+                septaApi.getBusLocations( currentBusStop.getRoutes().get(0) );
+            }
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -219,8 +286,10 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 //get user location
                 //getLastKnownLocation();
+                gpsPermissionButton.setVisibility(View.GONE);
                 updateLocation();
             }else {
+                gpsPermissionButton.setVisibility(View.VISIBLE);
                 Log.d("Permissions Result", "Permission denied");
                 Toast.makeText(this, "This app requires access to location.", Toast.LENGTH_LONG).show();
             }
@@ -235,7 +304,12 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         @Override
         public void run() {
             started = true;
-            septaApi.getBusLocations(currentBusStop.getRoutes().get(0));
+            if( currentBusStop != null ) {
+                ArrayList<String> routes = currentBusStop.getRoutes();
+                if (routes != null) {
+                    septaApi.getBusLocations(routes.get(0));
+                }
+            }
         }
 
         public boolean isRunning(){ return started; }
@@ -270,6 +344,15 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             }
         }
 
+        if( savedBusStopId > 0 ){
+            if( busStops.containsKey(savedBusStopId) ){
+                BusStop stop = busStops.get(savedBusStopId);
+                if( stop != null ) {
+                    busStopMarkerClicked( stop );
+                }
+            }
+        }
+
         Log.d("septa","bus stop locations complete.");
     }
 
@@ -277,7 +360,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
      * handle success response for bus stop schedule response
      * mainly used to get routes serviced by bus stop
      *
-     * sets BusLocationsTask on Timer schedule
+     * sets BusLocationsTask on Timer schedule to run every 12 seconds
      *
      * @param data
      */
@@ -301,7 +384,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             busTimer.cancel();
             busTimer = new Timer();
             busLocationTask = new BusLocationTask();
-            busTimer.scheduleAtFixedRate(busLocationTask,0,10000);
+            busTimer.scheduleAtFixedRate(busLocationTask,0,12000);
 
         }catch (JSONException e){
             e.printStackTrace();
@@ -315,33 +398,43 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
      */
     private void handleBusLocationsResponse( JSONArray data ){
 
-        //remove previous bus markers
-        for(Bus bus : buses.values() ){
-            bus.getMapMarker().remove();
-        }
-        buses.clear();
+        List<String> trip_ids = new ArrayList<>();
+        Map<Integer, Bus> newBuses = new HashMap<>();
 
-        //update buses, set new bus markers
-        List<String> trip_ids = new ArrayList<String>();
+        //add buses to new bus list
         if( currentBusStop != null ){
             for(int i = 0; i < data.length(); i++ ){
                 try {
-                    Bus bus = new Bus(data.getJSONObject(i));
-                    if( currentBusStop.isForDestination( bus.getDestination() ) ){
-                        LatLng location = new LatLng( bus.getLat(), bus.getLon() );
-                        Marker marker = map.addMarker(new MarkerOptions().position(location)
-                                .title("route:" + currentBusStop.getRoutes().get(0))
-                                .snippet("ETA: ")
-                                .icon(busIcon));
-                        marker.setTag(bus);
-                        bus.setMapMarker(marker);
-                        buses.put(bus.getId(), bus);
-                        trip_ids.add( String.valueOf(bus.getTrip()) );
+                    Bus newBus = new Bus(data.getJSONObject(i));
+                    if( currentBusStop.isForDestination( newBus.getDestination() ) ){
+                        newBuses.put(newBus.getId(), newBus);
+                        trip_ids.add( String.valueOf(newBus.getTrip()) );
+
+                        //update bus object or add new one
+                        if( buses.containsKey(newBus.getId()) ){
+                            Objects.requireNonNull(buses.get(newBus.getId())).update(data.getJSONObject(i));
+                        }else{
+                            buses.put( newBus.getId(), newBus );
+                        }
                     }
                 }catch(JSONException e){
                     e.printStackTrace();
                 }
             }
+
+            //remove buses that are not in new bus list
+            Iterator<Integer> busIterator = buses.keySet().iterator();
+            while( busIterator.hasNext() ){
+                Integer key = busIterator.next();
+                if( ! newBuses.containsKey(key) ){
+                    Bus bus = buses.get(key);
+                    if( bus != null ){
+                        bus.removeMarker();
+                    }
+                    busIterator.remove();
+                }
+            }
+            newBuses.clear();
 
             //get bus arrival times
             try {
@@ -349,8 +442,6 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             }catch (UnsupportedEncodingException e){
                 e.printStackTrace();
             }
-
-            Toast.makeText(this,"Bus locations updated", Toast.LENGTH_SHORT).show();
         }else{
             Toast.makeText(this,"Bus Stop not selected", Toast.LENGTH_SHORT).show();
         }
@@ -375,13 +466,34 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
 
         //update bus arrival times
-        for(Bus bus : buses.values() ){
+        Iterator<Integer> busIterator = buses.keySet().iterator();
+        while( busIterator.hasNext() ){
+            Integer key = busIterator.next();
+            Bus bus = buses.get(key);
             BusStopTime busStopTime = busStopTimes.get(bus.getTrip());
             if( busStopTime != null ){
                 if( currentBusStop.getId() == busStopTime.getStopId() ){
                     bus.setArrivalTime( busStopTime.getArrivalTime() );
-                    if( bus.isPastStop() ){
-                        bus.getMapMarker().remove();
+                    if( ! bus.isPastStop() && bus.getETA() <= etaThreshold ){
+                        LatLng location = new LatLng( bus.getLat(), bus.getLon() );
+                        Marker marker = bus.getMapMarker();
+
+                        //add map marker or update existing one
+                        if( marker != null ){
+                            marker.setSnippet("ETA: " + bus.getETA() + "mins");
+                            marker.setPosition(location);
+                        }else{
+                            marker = map.addMarker(new MarkerOptions().position(location)
+                                    .title("route:" + currentBusStop.getRoutes().get(0))
+                                    .snippet("ETA: " + bus.getETA() + "mins")
+                                    .icon(busIcon));
+                            marker.setTag(bus);
+                            bus.setMapMarker(marker);
+                        }
+                        marker.showInfoWindow();
+                    }else{
+                        bus.removeMarker();
+                        busIterator.remove();
                     }
                 }
             }
@@ -396,10 +508,14 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private void zoomToFitMarkers(){
         LatLngBounds.Builder builder = new LatLngBounds.Builder();
         for(Bus bus : buses.values()){
-            builder.include(bus.getMapMarker().getPosition());
+            if( bus.hasMarker() ) {
+                builder.include(bus.getMapMarker().getPosition());
+            }
         }
         for(BusStop stop : busStops.values()){
-            builder.include(stop.getMapMarker().getPosition());
+            if( stop.hasMarker() ) {
+                builder.include(stop.getMapMarker().getPosition());
+            }
         }
         LatLngBounds bound = builder.build();
         CameraUpdate cameraUpdate = CameraUpdateFactory.newLatLngBounds(bound, 15);
@@ -442,7 +558,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             Log.d("SEPTA", error);
             Toast.makeText(this, error, Toast.LENGTH_LONG).show();
         }else{
-            Toast.makeText(this, "SEPTA api error", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "SEPTA api error. Please select different stop.", Toast.LENGTH_LONG).show();
         }
     }
 }

@@ -1,5 +1,8 @@
 package edu.temple.businfo;
 
+import android.text.format.DateFormat;
+import android.util.Log;
+
 import com.google.android.gms.maps.model.Marker;
 
 import org.json.JSONException;
@@ -29,8 +32,27 @@ public class Bus {
         this.late = args.getInt("late");
     }
 
+    public void update(JSONObject args) throws JSONException {
+        this.destination = args.getString("destination");
+        this.lat = args.getDouble("lat");
+        this.lon = args.getDouble("lng");
+        this.trip = args.getInt("trip");
+        this.late = args.getInt("late");
+    }
+
     public void setMapMarker(Marker marker){
         this.mapMarker = marker;
+    }
+
+    public Boolean hasMarker(){
+        return mapMarker != null;
+    }
+
+    public void removeMarker(){
+        if( mapMarker != null ){
+            mapMarker.remove();
+            mapMarker = null;
+        }
     }
 
     public void setArrivalTime(String time){
@@ -49,11 +71,15 @@ public class Bus {
 
     public void setEta(){
         Calendar now = Calendar.getInstance();
+        Log.d("septa","now: " + now.getTime().toString());
+        Log.d("septa","arrival: " + arrival_time.getTime().toString());
         long diff = arrival_time.getTimeInMillis() - now.getTimeInMillis();
         long seconds = diff / 1000;
         long minutes = seconds / 60;
         ETA = (int) minutes;
-        mapMarker.setSnippet("ETA: " + ETA);
+        if( mapMarker != null ) {
+            mapMarker.setSnippet("ETA: " + ETA + "mins");
+        }
     }
 
     public int getId(){ return id; }
