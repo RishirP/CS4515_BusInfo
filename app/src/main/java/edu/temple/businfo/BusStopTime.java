@@ -13,8 +13,8 @@ public class BusStopTime {
 
     public BusStopTime(JSONObject args) throws JSONException {
         this.trip_id = args.getInt("trip_id");
-        this.arrival_time = args.getString("destination");
-        this.departure_time = args.getString("destination");
+        this.arrival_time = args.getString("arrival_time");
+        this.departure_time = args.getString("departure_time");
         this.stop_id = args.getInt("stop_id");
         this.stop_sequence = args.getInt("stop_sequence");
     }

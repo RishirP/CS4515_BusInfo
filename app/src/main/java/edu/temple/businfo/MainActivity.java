@@ -298,11 +298,10 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             }
             Objects.requireNonNull(busStops.get(stop_id)).setRoutes( routes );
 
-            //schedule bus locations to update every 10 seconds
-            if( ! busLocationTask.isRunning() ){
-                busTimer.scheduleAtFixedRate(busLocationTask,0,10000);
-            }
-            //septaApi.getBusLocations( routes.get(0) );
+            busTimer.cancel();
+            busTimer = new Timer();
+            busLocationTask = new BusLocationTask();
+            busTimer.scheduleAtFixedRate(busLocationTask,0,10000);
 
         }catch (JSONException e){
             e.printStackTrace();
@@ -350,7 +349,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             }catch (UnsupportedEncodingException e){
                 e.printStackTrace();
             }
-            zoomToFitMarkers();
+
             Toast.makeText(this,"Bus locations updated", Toast.LENGTH_SHORT).show();
         }else{
             Toast.makeText(this,"Bus Stop not selected", Toast.LENGTH_SHORT).show();
