@@ -189,8 +189,12 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 etaThreshold = Integer.parseInt( busEtaEditText.getText().toString() );
                 Log.d("septa","eta threshold: " + etaThreshold);
                 try {
-                    busTimer.cancel();
-                    septaApi.getBusSchedule(currentBusStop.getId());
+                    if(currentBusStop != null) {
+                        busTimer.cancel();
+                        septaApi.getBusSchedule(currentBusStop.getId());
+                    }else{
+                        Toast.makeText(MainActivity.this,"Please select a bus stop",Toast.LENGTH_SHORT).show();
+                    }
                 } catch (UnsupportedEncodingException e) {
                     e.printStackTrace();
                 }
